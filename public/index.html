@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Identificador de Peças de Veículos com IA</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: black;
+            color: white;
+            overflow: hidden;
+        }
+
+        video, canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            object-fit: cover;
+            z-index: 0;
+        }
+
+        canvas {
+            display: none;
+        }
+
+        #ui-container {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            z-index: 2;
+        }
+
+        #controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            background: linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0));
+        }
+
+        button {
+            padding: 12px 20px;
+            font-size: 16px;
+            font-weight: bold;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            justify-content: center;
+        }
+
+            button.whatsapp-link {
+                background-color: #25D366;
+            }
+
+            button:hover:not(:disabled) {
+                filter: brightness(1.1);
+                transform: translateY(-2px);
+            }
+
+            button:disabled {
+                background: #555;
+                cursor: not-allowed;
+                opacity: 0.7;
+            }
+
+        #output-panel {
+            background: rgba(0,0,0,0.9);
+            padding: 15px;
+            max-height: 85vh;
+            overflow-y: auto;
+            box-sizing: border-box;
+            border-top: 1px solid #444;
+        }
+
+        #identification-result {
+            background-color: #2a2a2a;
+            padding: 1rem;
+            border-radius: 6px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            line-height: 1.6;
+            font-size: 1em;
+            text-align: center;
+        }
+
+        .status-text {
+            text-align: center;
+            padding: 20px;
+            font-size: 1.1em;
+            font-weight: 500;
+        }
+
+        .actions-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas"></canvas>
+    <div id="ui-container">
+        <div id="controls">
+            <button id="zoomBtn">🔍 Zoom: 1x</button>
+            <button id="captureBtn">📷 Identificar Peça</button>
+        </div>
+        <div id="output-panel">
+            <div id="status-text" class="status-text">🛠️ Aponte a câmera para a peça do veículo.</div>
+        </div>
+    </div>
+
+    <script>
+        const video = document.getElementById("video");
+        const canvas = document.getElementById("canvas");
+        const ctx = canvas.getContext("2d");
+        const outputPanel = document.getElementById("output-panel");
+        const controlsDiv = document.getElementById("controls");
+        const zoomBtn = document.getElementById("zoomBtn");
+        const captureBtn = document.getElementById("captureBtn");
+        let mediaTrack, currentZoom = 1;
+        const zoomLevels = [1, 1.5, 2, 3];
+
+        async function startCamera() {
+            try {
+                const constraints = { video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } } };
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+                mediaTrack = stream.getVideoTracks()[0];
+            } catch (err) {
+                outputPanel.innerHTML = `<div class="status-text">❌ Erro ao acessar a câmera.</div>`;
+            }
+        }
+
+        function toggleZoom() {
+            if (!mediaTrack) return;
+            const capabilities = mediaTrack.getCapabilities();
+            if (!capabilities || !capabilities.zoom) { zoomBtn.style.display = 'none'; return; }
+            const currentIndex = zoomLevels.indexOf(currentZoom);
+            currentZoom = zoomLevels[(currentIndex + 1) % zoomLevels.length];
+            if (currentZoom > capabilities.zoom.max) currentZoom = zoomLevels[0];
+            mediaTrack.applyConstraints({ advanced: [{ zoom: currentZoom }] });
+            zoomBtn.innerText = `🔍 Zoom: ${currentZoom}x`;
+        }
+
+        function resetUI() {
+            canvas.style.display = 'none';
+            video.style.display = 'block';
+            outputPanel.innerHTML = `<div id="status-text" class="status-text">🛠️ Aponte a câmera para a peça do veículo.</div>`;
+            controlsDiv.style.display = 'flex';
+            captureBtn.disabled = false;
+        }
+
+        async function captureAndIdentify() {
+            captureBtn.disabled = true;
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            video.style.display = 'none';
+            canvas.style.display = 'block';
+            controlsDiv.style.display = 'none';
+            outputPanel.innerHTML = `<div class="status-text">⚙️ Identificando a peça e o veículo...</div>`;
+
+            try {
+                const imageDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+                // ATENÇÃO: A URL da API agora aponta para o novo arquivo 'identify-piece'
+                const apiUrl = "https://seu-projeto.vercel.app/api/identify-piece";
+
+                if (apiUrl.includes("seu-projeto.vercel.app")) {
+                    throw new Error("URL da API não foi configurada. Edite o arquivo HTML.");
+                }
+
+                const response = await fetch(apiUrl, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ image: imageDataUrl })
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || `Erro na API: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                // Exibe o resultado da identificação
+                if (data.pecaIdentificada && data.modeloVeiculo) {
+                    outputPanel.innerHTML = `<h2>✅ Análise Concluída</h2><pre id="identification-result">Peça: ${data.pecaIdentificada}\nVeículo: ${data.modeloVeiculo}</pre>`;
+                } else {
+                    outputPanel.innerHTML = `<h2>⚠️ Análise Incompleta</h2><pre id="identification-result">Não foi possível identificar todas as informações necessárias na imagem.</pre>`;
+                }
+
+                const actionsContainer = document.createElement('div');
+                actionsContainer.className = 'actions-container';
+
+                // Cria o botão do WhatsApp se ambas as informações estiverem disponíveis
+                if (data.pecaIdentificada && data.modeloVeiculo) {
+                    const whatsappButton = document.createElement('button');
+                    whatsappButton.className = 'whatsapp-link';
+                    whatsappButton.innerHTML = `💬 Consultar Estoque via WhatsApp`;
+
+                    const mensagem = `Olá! Gostaria de saber se você vende essa peça (${data.pecaIdentificada}) para o modelo ${data.modeloVeiculo}.`;
+                    const whatsappUrl = `https://wa.me/5524998132856?text=${encodeURIComponent(mensagem)}`;
+
+                    whatsappButton.onclick = () => window.open(whatsappUrl, '_blank');
+                    actionsContainer.appendChild(whatsappButton);
+                }
+
+                // Botão de tentar novamente
+                const retryButton = document.createElement('button');
+                retryButton.innerText = 'Identificar Outra Peça';
+                retryButton.onclick = resetUI;
+                actionsContainer.appendChild(retryButton);
+
+                outputPanel.appendChild(actionsContainer);
+
+            } catch (err) {
+                outputPanel.innerHTML = `<div class="status-text">❌ Erro ao analisar:<br><small>${err.message}</small></div>`;
+                const retryContainer = document.createElement('div');
+                retryContainer.className = 'actions-container';
+                const retryButton = document.createElement('button');
+                retryButton.innerText = 'Tentar Novamente';
+                retryButton.onclick = resetUI;
+                retryContainer.appendChild(retryButton);
+                outputPanel.appendChild(retryContainer);
+            }
+        }
+
+        zoomBtn.addEventListener('click', toggleZoom);
+        captureBtn.addEventListener('click', captureAndIdentify);
+        startCamera();
+    </script>
+</body>
+</html>
