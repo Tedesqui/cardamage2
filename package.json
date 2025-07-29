@@ -1,0 +1,9 @@
+{
+    "name": "vehicle-piece-identifier-backend",
+    "version": "1.0.0",
+    "private": true,
+    "description": "Backend para o Identificador de Peças de Veículos com IA",
+    "dependencies": {
+        "openai": "^4.0.0"
+    }
+}
